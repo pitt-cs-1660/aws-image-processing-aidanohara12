@@ -1,0 +1,1 @@
+image=548852144303.dkr.ecr.us-east-1.amazonaws.com/greyscale-lambda:latest

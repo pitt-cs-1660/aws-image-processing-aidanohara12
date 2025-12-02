@@ -1,16 +1,13 @@
 FROM public.ecr.aws/lambda/python:3.13
 
-# install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Copy requirements file
+COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 
-# Copy dependency files
-COPY pyproject.toml ${LAMBDA_TASK_ROOT}/
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install dependencies using uv
-RUN uv pip install --system --no-cache -r pyproject.toml
-
-# Copy handler code
+# Copy handler
 COPY handler.py ${LAMBDA_TASK_ROOT}/
 
-# Set the CMD to your handler
+# Lambda handler
 CMD ["handler.greyscale_handler"]

@@ -114,7 +114,6 @@ aws s3api put-public-access-block \
 aws s3api put-bucket-policy --bucket <your-pitt-username>-assignment3 --policy file://bucket-policy.json
 ```
 
-
 ## Bucket Structure Summary
 
 ```
