@@ -3,12 +3,12 @@ FROM public.ecr.aws/lambda/python:3.13
 # install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-COPY pyproject.toml .
+COPY pyproject.toml ${LAMBDA_TASK_ROOT}
 
-RUN uv sync
+RUN uv pip install --system .
 
-COPY handler.py .
+COPY handler.py ${LAMBDA_TASK_ROOT}
 
-ENV PYTHONPATH "${LAMBDA_TASK_ROOT}/.venv/lib/python3.13/site-packages:${PYTHONPATH}"
+ENV PYTHONPATH=${LAMBDA_TASK_ROOT}
 
-CMD ["handler.exif_handler"]
+CMD [ "handler.exif_handler" ]

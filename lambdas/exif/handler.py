@@ -47,7 +47,6 @@ def exif_handler(event, context):
                     print(f"Processing: s3://{bucket_name}/{object_key}")
 
                     image = download_from_s3(bucket_name, object_key)
-
                     exif_data = {
                         'width': image.width,
                         'height': image.height,
@@ -62,14 +61,11 @@ def exif_handler(event, context):
                                 try:
                                     exif_data[str(tag_id)] = str(value)
                                 except Exception as e:
-                                    print(f"Error processing tag {tag_id}: {e}")
+                                    print(f"error processing tag {tag_id}: {e}")
 
-                    print(f"Extracted EXIF data: {json.dumps(exif_data, indent=2)}")
-
-                    filename = Path(object_key).stem  # @note: get filename without extension
+                    filename = Path(object_key).stem
                     output_key = f"processed/exif/{filename}.json"
                     upload_to_s3(bucket_name, output_key, json.dumps(exif_data, indent=2), 'application/json')
-                    print(f"Uploaded to: {output_key}")
 
                     processed_count += 1
 
