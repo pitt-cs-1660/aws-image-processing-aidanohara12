@@ -1,8 +1,9 @@
 import json
-from PIL import Image
+from PIL import Image, ImageOps
 import io
 import boto3
 from pathlib import Path
+from urllib.parse import unquote_plus
 
 def download_from_s3(bucket, key):
     s3 = boto3.client('s3')
@@ -46,18 +47,25 @@ def greyscale_handler(event, context):
 
                     print(f"Processing: s3://{bucket_name}/{object_key}")
 
-                    ######
-                    #
-                    #  TODO: add greyscale lambda code here
-                    #
-                    ######
+                    # --- GREYSCALE LOGIC ---
+                    decoded_key = unquote_plus(object_key)
+                    img = download_from_s3(bucket_name, decoded_key)
+                    img = ImageOps.exif_transpose(img)
+                    if img.mode != "L":
+                        img = img.convert("L")
+
+                    name = Path(decoded_key).stem
+                    grayscale_key = f"processed/greyscale/{name}.jpg"
+
+                    upload_to_s3(bucket_name, grayscale_key, img)
+                    print(f"Uploaded greyscale image to s3://{bucket_name}/{grayscale_key}")
+                    # ----------------------
 
                     processed_count += 1
 
                 except Exception as e:
                     failed_count += 1
-                    error_msg = f"Failed to process {object_key}: {str(e)}"
-                    print(error_msg)
+                    print(f"Failed to process {object_key}: {str(e)}")
 
         except Exception as e:
             print(f"Failed to process SNS record: {str(e)}")
