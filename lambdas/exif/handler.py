@@ -1,9 +1,8 @@
 import json
-from PIL import Image, ExifTags, ImageOps
+from PIL import Image
 import io
 import boto3
 from pathlib import Path
-from urllib.parse import unquote_plus
 
 def download_from_s3(bucket, key):
     s3 = boto3.client('s3')
@@ -47,39 +46,37 @@ def exif_handler(event, context):
 
                     print(f"Processing: s3://{bucket_name}/{object_key}")
 
-                    # --- EXIF LOGIC ---
-                    decoded_key = unquote_plus(object_key)
-                    img = download_from_s3(bucket_name, decoded_key)
-                    img = ImageOps.exif_transpose(img)
+                    image = download_from_s3(bucket_name, object_key)
 
-                    exif_dict = {}
-                    try:
-                        raw_exif = img.getexif()
-                        if raw_exif:
-                            tag_map = {ExifTags.TAGS.get(k, str(k)): raw_exif.get(k) for k in raw_exif.keys()}
-                            # Convert non-JSON-serializable values to strings
-                            exif_dict = {k: (v if isinstance(v, (str, int, float, bool, type(None))) else str(v))
-                                         for k, v in tag_map.items()}
-                    except Exception as ex:
-                        print(f"No EXIF extracted for {decoded_key}: {ex}")
+                    exif_data = {
+                        'width': image.width,
+                        'height': image.height,
+                        'format': image.format,
+                        'mode': image.mode
+                    }
 
-                    name = Path(decoded_key).stem
-                    metadata_key = f"processed/exif/{name}.json"
+                    if hasattr(image, 'getexif'):
+                        exif = image.getexif()
+                        if exif:
+                            for tag_id, value in exif.items():
+                                try:
+                                    exif_data[str(tag_id)] = str(value)
+                                except Exception as e:
+                                    print(f"Error processing tag {tag_id}: {e}")
 
-                    upload_to_s3(
-                        bucket_name,
-                        metadata_key,
-                        json.dumps({"source_key": decoded_key, "exif": exif_dict}).encode("utf-8"),
-                        content_type="application/json"
-                    )
-                    print(f"Uploaded EXIF metadata to s3://{bucket_name}/{metadata_key}")
-                    # ----------------------
+                    print(f"Extracted EXIF data: {json.dumps(exif_data, indent=2)}")
+
+                    filename = Path(object_key).stem  # @note: get filename without extension
+                    output_key = f"processed/exif/{filename}.json"
+                    upload_to_s3(bucket_name, output_key, json.dumps(exif_data, indent=2), 'application/json')
+                    print(f"Uploaded to: {output_key}")
 
                     processed_count += 1
 
                 except Exception as e:
                     failed_count += 1
-                    print(f"Failed to process {object_key}: {str(e)}")
+                    error_msg = f"Failed to process {object_key}: {str(e)}"
+                    print(error_msg)
 
         except Exception as e:
             print(f"Failed to process SNS record: {str(e)}")

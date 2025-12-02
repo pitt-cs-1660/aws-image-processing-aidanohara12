@@ -1,5 +1,5 @@
 import json
-from PIL import Image, ImageOps
+from PIL import Image
 import io
 import boto3
 from pathlib import Path
@@ -23,47 +23,32 @@ def upload_to_s3(bucket, key, data, content_type='image/jpeg'):
         s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType=content_type)
 
 def resize_handler(event, context):
-    """
-    Resize Lambda - Process all images in the event
-    """
     print("Resize Lambda triggered")
-    print(f"Event received with {len(event.get('Records', []))} SNS records")
-
     processed_count = 0
     failed_count = 0
 
-    # iterate over all SNS records
     for sns_record in event.get('Records', []):
         try:
-            # extract and parse SNS message
             sns_message = json.loads(sns_record['Sns']['Message'])
-
-            # iterate over all S3 records in the SNS message
             for s3_event in sns_message.get('Records', []):
                 try:
                     s3_record = s3_event['s3']
                     bucket_name = s3_record['bucket']['name']
-                    object_key = s3_record['object']['key']
+                    object_key = unquote_plus(s3_record['object']['key'])
 
                     print(f"Processing: s3://{bucket_name}/{object_key}")
 
-                    # --- RESIZE LOGIC ---
-                    decoded_key = unquote_plus(object_key)
-                    img = download_from_s3(bucket_name, decoded_key)
-                    img = ImageOps.exif_transpose(img)
-                    if img.mode not in ("RGB", "L"):
-                        img = img.convert("RGB")
+                    img = download_from_s3(bucket_name, object_key)
+                    img = img.convert("RGB") if img.mode != "RGB" else img
 
-                    name = Path(decoded_key).stem
-                    resized_key = f"processed/resize/{name}.jpg"
+                    run_id = Path(object_key).stem.split("test-")[-1]
+                    resized_key = f"processed/resize/test-{run_id}.jpg"
 
                     resized = img.copy()
-                    resized.thumbnail((1024, 1024))
+                    resized.thumbnail((512, 512))
                     upload_to_s3(bucket_name, resized_key, resized)
 
                     print(f"Uploaded resized image to s3://{bucket_name}/{resized_key}")
-                    # --------------------
-
                     processed_count += 1
 
                 except Exception as e:
@@ -71,14 +56,11 @@ def resize_handler(event, context):
                     print(f"Failed to process {object_key}: {str(e)}")
 
         except Exception as e:
-            print(f"Failed to process SNS record: {str(e)}")
             failed_count += 1
+            print(f"Failed to process SNS record: {str(e)}")
 
-    summary = {
-        'statusCode': 200 if failed_count == 0 else 207,  # @note: 207 = multi-status
-        'processed': processed_count,
-        'failed': failed_count,
-    }
-
+    summary = {'statusCode': 200 if failed_count == 0 else 207,
+               'processed': processed_count,
+               'failed': failed_count}
     print(f"Processing complete: {processed_count} succeeded, {failed_count} failed")
     return summary
